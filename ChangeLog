@@ -1,0 +1,64 @@
+
+2021-05-25: version 2.0.7
+* Changed selection display to use a border rather than inversion (which was broken on some systems)
+* Had an accident with a time machine and landed almost a decade in the future
+* Fixed issues with wxWidgets versions that have appeared in this time
+* Updated autotools files for newer versions
+* Updated URL references to use https
+
+2011-12-15: version 2.0.6
+* Fixed size type mismatch in ListMenuManager on 64-bit systems.
+* Changed character encoding used for level titles, passwords and hints in Unicode builds from UTF-8 to ISO-8859-1.
+* Added checks to avoid segmentation fault when character encoding conversion fails.
+
+2010-08-12: version 2.0.5.1
+* Added playtesting support (using Tile World)
+* Added rule set selector (replacing "Magic number" field)
+* Fixed crash-on-exit on Windows with recent versions of wxWidgets
+* Changed license to GPLv3
+
+2009-03-01: version 2.0.4.2
+* Removed recognition of meta key
+* Added undo/redo support
+* Fixed minor bug in monster list
+* Separated frame from view
+* Made frame appear on startup, rather than initial dialog
+* Added acknowledgement of pgchip's usage of tile 0x38 as an ice block
+* Tileset now uses black, not tile 0x38, for out-of-range tiles
+* Basic tile rotation support
+* Monsters etc. rearranged in tile selector so that right = clockwise
+* Separate modes for wire placement and map region selection
+* Slots in tile selector now used for these modes
+* Added copy/paste support (compatible with ChipEdit)
+* Fixed file loading when wxUSE_STD_IOSTREAM is not set
+
+2008-04-27: version 2.0.3.1
+* Fixed typo causing compile failure when wxWidgets streams are in use
+* No changes to runtime behaviour except for version number
+
+2008-04-24: version 2.0.3
+* Added sort button to monster list
+* Fixed a drawing bug when disabling wire display
+* Improved compatibility with wxWidgets 2.6
+
+2008-04-21: version 2.0.2
+* Graphical tile selector
+* Mouse button functionality changed somewhat
+* Map selection and filling with tiles added
+* Steps made towards undo/redo
+
+2008-04-11: version 2.0.1
+* Minor bug-fix release
+* Title bar and map selection are now properly updated when a level is selected
+* Limits on tile size to avoid crashes at very high sizes
+
+2008-04-10: version 2.0.0
+* First release
+* Map editing
+* Level properties editing
+* Monster list editing
+* Level set support
+* MSCC level set data format
+* Tile World small/masked tileset image format
+* CCEdit tileset format
+

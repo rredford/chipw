@@ -1,0 +1,319 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Chip's Workshop 2.0.7 User's Guide</title>
+</head>
+<body>
+<h1>Chip's Workshop 2.0.7 User's Guide</h1>
+<h2>Table of contents</h2>
+<ul>
+  <li><a href="#intro">Introduction</a></li>
+  <li><a href="#bugreport">Bug reports</a></li>
+  <li><a href="#start">Getting started</a></li>
+  <li><a href="#tileplace">Placing tiles</a></li>
+  <li><a href="#wires">Connecting buttons</a></li>
+  <li><a href="#mapselect">Map area selection</a></li>
+  <li><a href="#levelman">Level management</a></li>
+  <li><a href="#clipboard">Copy and paste</a></li>
+  <li><a href="#undo">Undo and redo</a></li>
+  <li><a href="#viewopts">Customising the display</a></li>
+  <li><a href="#readonly">Read-only mode</a></li>
+  <li><a href="#fileman">File management</a></li>
+  <li><a href="#playtest">Playtesting</a></li>
+  <li><a href="#advanced">Advanced options</a></li>
+  <li><a href="#licence">Licence terms</a></li>
+</ul>
+<div id="intro">
+<h2>Introduction</h2>
+<p>
+  Chip's Workshop 2 is a cross-platform level editor program for the game Chip's Challenge.
+  It has been tested on Linux and Windows, and should also work on Mac systems.
+</p>
+</div>
+<div id="bugreport">
+<h2>Bug reports</h2>
+<p>
+  Chip's Workshop is still in the beta phase, and so it is likely to have quite a few bugs.
+  If something doesn't seem to work properly, please report the problem to
+  <a href="mailto:chipw@chrise.me.uk">chipw@chrise.me.uk</a>.
+</p>
+</div>
+<div id="start">
+<h2>Getting started</h2>
+<p>
+  When you run the Chip's Workshop program, you will be presented with an empty level editor window.
+</p>
+<p>
+  If you wish to create a new level set, choose New from the File menu.
+  To add your first level, click the + button on the left.
+</p>
+<p>
+  If you wish to open a level set, choose Open from the File menu.
+  You will be presented with a file dialog. When you open a file, no level will be initially
+  selected. Select the level you wish to edit in the list on the left.
+</p>
+</div>
+<div id="tileplace">
+<h2>Placing tiles</h2>
+<p>
+  The level map appears to the right. If you move the mouse cursor over the map, the status bar at the bottom of the window will show
+  the coordinates of your location, and information about the tiles at that position.
+  To select a tile to place, click the Tiles tab at the bottom-left.
+  You may then choose the tile you want from the list. Then, click on the level map where you want to place the new tile.
+</p>
+<p>
+  The tile you place will, by default, become the only one in its location.
+</p>
+<p>
+  A map location may in fact contain up to two tiles: A &quot;creature&quot;, and a &quot;non-creature&quot;.
+  Chip, all monsters and blocks are considered to be creatures; all other tiles are non-creatures.
+  To place both tiles in a location, simply hold down the Shift key while placing the second tile.
+  It will automatically go into the correct layer for its type.
+</p>
+<p>
+  Use the &quot;empty&quot; tile to erase previously placed tiles.
+  By default, it will erase both tiles in the selected location.
+  If you wish to erase only the creature tile, hold down the Control key.
+  If you wish to erase only the non-creature tile, hold down the Shift key.
+</p>
+</div>
+<div id="wires">
+<h2>Connecting buttons</h2>
+<p>
+  Trap and clone buttons need to be connected to their targets with wires in order to function.
+  When a trap or clone machine is placed, it is automatically selected (indicated by being displayed inverted).
+  Buttons placed of the appropriate type will then be automatically wired to the selected target.
+  Wires will, by default, be drawn on the level map, and you can see a list of wires connected to a tile by moving the mouse over it
+  and looking in the status bar.
+</p>
+<p>
+  If you wish to add or remove a wire later, choose the appropriate wire type (trap or clone) from the tile selector.
+  To add wires, click first on the trap or clone machine, then on each button that you wish to connect to it.
+  To remove the wires connected to a tile, hold down the Control key and click on the tile.
+</p>
+<p>
+  If you have a middle mouse button, you may alternatively hold down the Shift key and click with the middle mouse button to add wires,
+  or hold down the Control and Shift keys and click with the middle mouse button to remove wires.
+  This method can be used without first selecting the wire from the tile selector.
+</p>
+</div>
+<div id="mapselect">
+<h2>Map area selection</h2>
+<p>
+  If you choose the &quot;rectangle select&quot; tool from the tile selector, you may click and drag to select a rectangular area of the level map.
+  To deselect the current area, hold down the Control key and click.
+  While an area is selected, any tiles placed within it will be applied to all selected locations.
+  This can be useful for filling a large area of the map with tiles such as water.
+</p>
+<p>
+  If you have a middle mouse button, you may use this for selection rather than choosing the &quot;rectangle select&quot; tool.
+</p>
+</div>
+<div id="levelman">
+<h2>Level management</h2>
+<p>
+  To view a list of all levels in the level set, click the Levels tab at the bottom-left of the window.
+  Click on a level in the list to select it for editing.
+  Use the + button above the list to create a new level.
+  If you wish to delete the current level, use the - button.
+  The ^ and v buttons may be used to change the order of the levels in the level set.
+</p>
+<p>
+  The ... button opens the level properties dialog. This can also be opened from the Edit menu.
+  This dialog enables you to change various level options, including the title, the password (click the button to randomly generate one),
+  the number of chips required (the number of chips in the level is automatically displayed below), the time limit (use 0 for no limit),
+  and the level hint.
+</p>
+<p>
+  You can also select the rule set that the level set is designed to be played in.
+  Note that this will be applied to all levels in the set.
+  If your level set is playable in both MS and Lynx rule sets, choose MS here.
+</p>
+</div>
+<div id="clipboard">
+<h2>Copy and paste</h2>
+<p>
+  Entire levels and individual areas of the map may be transferred using the clipboard.
+</p>
+<p>
+  To copy an entire level to the clipboard, select it in the level list, ensure that no area of the map is selected, then choose Copy from the Edit menu.
+  To paste a level from the clipboard, select the level after which you want to insert it, then choose Paste from the Edit menu.
+</p>
+<p>
+  To copy a map area to the clipboard, select it and then choose Copy from the Edit menu.
+  To paste a map area from the clipboard, select the top-left corner of the destination area, then choose Paste from the Edit menu.
+</p>
+<p>
+  Cut may be used to remove the level or map area from its present location once it has been copied to the clipboard.
+</p>
+</div>
+<div id="undo">
+<h2>Undo and redo</h2>
+<p>
+  You may reverse modifications to the level set by choosing Undo from the Edit menu.
+  You may reapply modifications that have been removed in this way by choosing Redo.
+</p>
+</div>
+<div id="viewopts">
+<h2>Customising the display</h2>
+<p>
+  The View menu may be used to change various display options:
+</p>
+<ul>
+  <li>Show wires - uncheck this if the wires are obstructing your view of the level.</li>
+  <li>Show upper layer - uncheck this to hide the top tile from each location to provide a better view of buried tiles.</li>
+  <li>Select tileset - use this to choose a different set of tile images.</li>
+  <li>Scale tiles - use this to adjust the size of the tiles.</li>
+</ul>
+<p>
+  You can also create multiple windows for the same level set, each of which can have different view settings, and a different level selected.
+</p>
+</div>
+<div id="readonly">
+<h2>Read-only mode</h2>
+<p>
+  If you wish to view a level set without the risk of making accidental changes, you may turn on Read-only mode from the Edit menu.
+  Caution: Read-only selection is <strong>not</strong> supported directly from the file selector, although a checkbox may erroneously appear.
+</p>
+</div>
+<div id="fileman">
+<h2>File management</h2>
+<p>
+  The File menu enables you to create or open a new level set or save the current level set.
+  The default filename extension for saving level sets is set to &quot;.ccl&quot; - this is exactly the same file format as Microsoft Chip's
+  Challenge .dat files, but is more distinctive.
+</p>
+<p>
+  You can have multiple documents open at once, so opening a new level set will not cause the currently open one to close.
+</p>
+<p>
+  Note that the Close option on the File menu will close all editor windows for the current level set.
+  The Quit option will close all currently open level sets.
+</p>
+</div>
+<div id="playtest">
+<h2>Playtesting</h2>
+<p>
+  When working on a level, it is often helpful to be able to quickly start the game to see the effects of a change.
+  The Playtest menu allows you to start playing the currently selected level directly from the editor.
+  Currently this only works with Tile World, or other programs with the same command line interface.
+</p>
+<p>
+  In particular, chips.exe is <strong>not</strong> supported.
+</p>
+<p>
+  Caution: Solutions and scores achieved during playtesting will not be saved.
+  You must start the game in the normal manner from outside the editor if you wish to record solutions or keep track of scores.
+</p>
+<p>
+  Before you can start playtesting, you must set up a profile with the details of the program to use.
+  To do this, choose Configure from the Playtest menu, and then click Add in the dialog box that appears.
+  Enter a name for this playtesting option (this name will appear in the Playtest menu) and select the program to run.
+  You can also select a rule set that will be used for playtesting when this option is chosen.
+</p>
+<p>
+  Once you have entered the settings, you can use the Test button to see whether they work.
+  If the settings are correct, a simple level called TEST will open in the game.
+  When you are ready, click OK to add the playtesting profile to the list.
+</p>
+<p>
+  It is possible to add several profiles to the list, for instance one for the MS rule set and one for the Lynx rule set.
+  Note that when clicking Add, the currently selected profile (if any) will be copied into the dialog.
+  This may help when adding multiple similar profiles.
+  When finished, click OK to save the profiles.
+</p>
+<p>
+  Now you can start playtesting the current level by choosing the desired profile from the Playtest menu.
+  To start the game more quickly, you may use the keyboard shortcut Alt+P followed by the number of the profile to use.
+</p>
+</div>
+<div id="advanced">
+<h2>Advanced options</h2>
+<h3>Direct layer placement</h3>
+<p>
+  The right mouse button can be used to create invalid combinations of tiles, such as a tile buried underneath a non-creature,
+  or a stack of two creatures.
+</p>
+<p>
+  By default, clicking with the right mouse button will cause the selected tile to be placed on the lower map layer, without affecting
+  the upper layer.
+</p>
+<p>
+  Hold down Shift to place the tile on the upper layer instead.
+</p>
+<h3>Stationary monsters</h3>
+<p>
+  When a monster is selected, you may hold down the Control key while placing it to create an invalid stationary monster tile.
+  This looks like a normal monster, and will be fatal to Chip if he steps on it, but it will not move.
+</p>
+<p>
+  Note: This facility should not be used for making normal traps or clone machines.
+</p>
+<h3>Monster list editor</h3>
+<p>
+  From the Edit menu, you can open the Monster list editor.
+  The current monster movement list will be shown at the top; the controls below can be used to edit the monster order, or add and remove monsters
+  from the list.
+</p>
+<p>
+  The bottom list shows locations containing monster tiles which have no entry on the monster list; if you select one of these, the coordinates will
+  automatically be filled in next to the Add button, ready to be added to the list.
+</p>
+<h3>Invalid wires</h3>
+<p>
+  You may create a wire of either type between arbitrary map locations by selecting the wire type, holding down the Shift key and clicking with the
+  right mouse button where the &quot;target&quot; end of the wire should be, then releasing Shift and clicking with the right mouse button where the
+  &quot;button&quot; end of the wire should be. To place multiple wires of the same type in the same direction between the same two tiles, additionally
+  hold down the Control key.
+</p>
+<h3>Invalid tile IDs</h3>
+<p>
+  Various tile ID codes can be placed into the level map which do not actually represent a real tile. Some of these can have corresponding images.
+  Chip's Workshop designates these as &quot;[XX] invalid&quot;, where XX is the hexadecimal representation of the tile ID, followed by a description
+  of the image commonly associated with the ID, where there is one.
+</p>
+<p>
+  If you wish to place these invalid tile codes in your own levels, you may select any 8-bit tile code from the &quot;IDs&quot; tab on the left.
+</p>
+<h3>Advanced properties</h3>
+<p>
+  The level properties dialog allows you to adjust a couple of extra values in the level set file:
+</p>
+<ul>
+  <li>
+    Rule set:
+    You can enter a number, in decimal, octal (prefixed with 0) or hexadecimal (prefixed with 0x).
+    This will then be stored in the first 4 bytes of the level set file.
+  </li>
+  <li>
+    Internal level number:
+    This is the level number field appearing at the start of the level's data in the level set file.
+    It should generally be left equal to the position of the level in the sequence.
+  </li>
+</ul>
+</div>
+<div id="licence">
+<h2>Licence terms</h2>
+<p>
+  Chip's Workshop 2.0.7 is Copyright 2008-2011,2021 Christopher Elsby.
+</p>
+<p>
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of version 3 of the GNU General Public License as
+  published by the Free Software Foundation.
+</p>
+<p>
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+</p>
+</p>
+  <a href="COPYING.html">View version 3 of the GNU General Public License</a>
+</p>
+<p>
+  If the above link does not work, see &lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.
+</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+[Tileset]
+Name=TileWorld CCEdit Tileset
+Tiles=TW_a.bmp
+MTiles=TW_b.bmp
+MTilesMask=TW_m.bmp
+Size=32
+BPP=24
+Description=This is the high color 32x32 tileset from TileWorld.

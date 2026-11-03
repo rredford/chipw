@@ -1,0 +1,4 @@
+#include "wx/msw/wx.rc"
+
+ICON_CHIPW      ICON    "chipw.ico"
+
