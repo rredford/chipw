@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -52,6 +54,10 @@
 #include <wx/msgdlg.h>
 #include <wx/region.h>
 #include <wx/clipbrd.h>
+#include <wx/stattext.h>
+#include <wx/font.h>
+#include <cmath>
+#include <cstdlib>
 
 #include <iostream>
 
@@ -62,6 +68,11 @@ public:
     LevelMapWindow(wxWindow* parent, LevelEditView* newview) : BufferedScrolledWindow(parent), view(newview) { }
     virtual void OnDraw(wxDC& dc) {if(view != NULL) view->OnDraw(&dc);}
     void OnMouse(wxMouseEvent& event) {if(view != NULL) view->OnMouse(event);}
+    void OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event)) {if(view != NULL) view->EndPan();}
+    void OnSize(wxSizeEvent& event) {event.Skip(); Refresh(false);}
+    // The move overlay is drawn at a fixed position in the window, so scrolling by
+    // copying pixels would drag it along. Repaint the whole (cheap) map instead.
+    virtual void ScrollWindow(int WXUNUSED(dx), int WXUNUSED(dy), const wxRect* WXUNUSED(rect) = NULL) {Refresh(false);}
     LevelEditView* view;
 private:
     DECLARE_EVENT_TABLE()
@@ -69,6 +80,8 @@ private:
 
 BEGIN_EVENT_TABLE(LevelMapWindow, BufferedScrolledWindow)
     EVT_MOUSE_EVENTS(LevelMapWindow::OnMouse)
+    EVT_MOUSE_CAPTURE_LOST(LevelMapWindow::OnCaptureLost)
+    EVT_SIZE(LevelMapWindow::OnSize)
 END_EVENT_TABLE()
 
 class TileSelectWindow : public BufferedScrolledWindow {
@@ -84,6 +97,13 @@ private:
 BEGIN_EVENT_TABLE(TileSelectWindow, BufferedScrolledWindow)
     EVT_MOUSE_EVENTS(TileSelectWindow::OnMouse)
 END_EVENT_TABLE()
+
+// Map zoom levels in percent of the 1:1 tile size ("Scale tiles").
+const int ZOOM_LEVELS[] = {25, 33, 50, 67, 75, 100, 125, 150, 200, 250, 300, 400, 500, 600, 800};
+const int ZOOM_LEVEL_COUNT = sizeof(ZOOM_LEVELS) / sizeof(ZOOM_LEVELS[0]);
+const int ZOOM_DEFAULT_INDEX = 5; // 100%
+// Map scrolling granularity in pixels (fine, so zooming can keep the point under the mouse).
+const int MAP_SCROLL_UNIT = 4;
 
 const int TILESEL_WIDTH = 6;
 const int TILESEL_HEIGHT = 20;
@@ -122,15 +142,17 @@ BEGIN_EVENT_TABLE(LevelEditView, wxView)
     EVT_UPDATE_UI(-1, LevelEditView::OnUpdateUI)
     EVT_LISTBOX(-1, LevelEditView::OnListBox)
     EVT_LISTBOX_DCLICK(-1, LevelEditView::OnListBox)
-    EVT_IDLE(LevelEditView::OnIdle)
+    EVT_NOTEBOOK_PAGE_CHANGED(-1, LevelEditView::OnNotebookPageChanged)
 END_EVENT_TABLE()
 
 Tileset LevelEditView::defaulttileset;
 bool LevelEditView::loadeddefaulttileset = false;
 
 LevelEditView::LevelEditView()
- :  level(NULL), selx(32), sely(32), selw(0), selh(0), clickx(32), clicky(32), readonly(false), showwires(true), showupper(true),
-    activebutton(wxMOUSE_BTN_NONE), buttonswap(false), idleredraw(DRAW_NONE),
+ :  level(NULL),
+    zoomindex(ZOOM_DEFAULT_INDEX), wheelrotation(0), panning(false), panhover(false), panwarp(false), zoomlabel(NULL),
+    selx(32), sely(32), selw(0), selh(0), clickx(32), clicky(32), readonly(false), showwires(true), showupper(true),
+    activebutton(wxMOUSE_BTN_NONE), buttonswap(false),
     mapwin(NULL), statusbar(NULL), mapbmp(NULL), levellist(NULL), tilelist(NULL), tilesel(NULL)
 {
 }
@@ -194,14 +216,35 @@ bool LevelEditView::OnCreate(wxDocument* doc, long flags) {
     // Set notebook panel sizer.
     notebookpanelsizer->Add(notebook, 1, wxGROW);
     notebookpanel->SetSizerAndFit(notebookpanelsizer);
-    // Level map on right.
-    mapwin = new LevelMapWindow(splitter, this);
+    // Level map on right, with a zoom bar above it.
+    wxPanel* mappanel = new wxPanel(splitter);
+    wxSizer* mappanelsizer = new wxBoxSizer(wxVERTICAL);
+    wxSizer* zoomsizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* zoomout = new wxButton(mappanel, ID_ZOOM_OUT, wxT("−"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    zoomout->SetToolTip(wxT("Zoom out (or scroll the mouse wheel down over the map)"));
+    zoomsizer->Add(zoomout, 0, wxALIGN_CENTER_VERTICAL);
+    wxButton* zoomreset = new wxButton(mappanel, ID_ZOOM_RESET, wxT("1:1"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    zoomreset->SetToolTip(wxT("Actual size (the size set in View > Scale tiles)"));
+    zoomsizer->Add(zoomreset, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 2);
+    wxButton* zoomin = new wxButton(mappanel, ID_ZOOM_IN, wxT("+"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    zoomin->SetToolTip(wxT("Zoom in (or scroll the mouse wheel up over the map)"));
+    zoomsizer->Add(zoomin, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 2);
+    zoomlabel = new wxStaticText(mappanel, -1, wxT("100%"));
+    zoomsizer->Add(zoomlabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
+    mappanelsizer->Add(zoomsizer, 0, wxALL, 2);
+    mapwin = new LevelMapWindow(mappanel, this);
     mapwin->SetBackgroundColour(wxColour(102, 102, 102));
+    mappanelsizer->Add(mapwin, 1, wxGROW);
+    mappanel->SetSizer(mappanelsizer);
     // Set up splitter.
     splitter->SetMinimumPaneSize(20);
-    splitter->SplitVertically(notebookpanel, mapwin, 150);
+    splitter->SplitVertically(notebookpanel, mappanel, 150);
     // Display the frame.
     splitter->SetSize(frame->GetClientSize());
+    // Load the tileset now, before anything is painted. Doing it lazily from inside
+    // a paint handler changes scrollbars and requests repaints mid-paint, which
+    // GTK3 ignores, leaving the tile selector blank until the window is resized.
+    InitTileset();
     frame->Show();
     frame->Raise();
     return true;
@@ -231,6 +274,8 @@ bool LevelEditView::OnClose(bool delwin) {
     if(GetDocument() != NULL && GetDocument()->GetViews().size() < 2 && !GetDocument()->Close())
         return false;
     Activate(false);
+    EndPan();
+    zoomlabel = NULL;
     if(mapwin != NULL)
         mapwin->view = NULL;
     mapwin = NULL;
@@ -630,6 +675,15 @@ void LevelEditView::OnCommand(wxCommandEvent& event) {
         }
         break;
     }
+    case ID_ZOOM_IN:
+        ZoomBy(1);
+        break;
+    case ID_ZOOM_OUT:
+        ZoomBy(-1);
+        break;
+    case ID_ZOOM_RESET:
+        SetZoom(ZOOM_DEFAULT_INDEX);
+        break;
     case ID_NEWVIEW:
         NewView();
         break;
@@ -711,6 +765,15 @@ void LevelEditView::OnUpdateUI(wxUpdateUIEvent& event) {
         event.Enable(true);
         event.Check(buttonswap);
         break;
+    case ID_ZOOM_IN:
+        event.Enable(zoomindex + 1 < ZOOM_LEVEL_COUNT);
+        break;
+    case ID_ZOOM_OUT:
+        event.Enable(zoomindex > 0);
+        break;
+    case ID_ZOOM_RESET:
+        event.Enable(zoomindex != ZOOM_DEFAULT_INDEX);
+        break;
     default:
         {
             PlayTestManager* playtestmgr = wxGetApp().GetPlayTestManager();
@@ -752,6 +815,20 @@ void LevelEditView::OnListBox(wxCommandEvent& event) {
     }
 }
 
+void LevelEditView::OnNotebookPageChanged(wxNotebookEvent& event) {
+    event.Skip();
+    // A page that was hidden may never have received a valid paint; make sure the
+    // newly shown page is redrawn.
+    if(tilesel != NULL) {
+        // The new page is shown after this event returns, so repaint it then.
+#if wxCHECK_VERSION(3, 0, 0)
+        tilesel->CallAfter(&BufferedScrolledWindow::RepaintNow);
+#else
+        tilesel->Refresh(false);
+#endif
+    }
+}
+
 void LevelEditView::SetLevel(CountedPtr<Level> newlevel) {
     if(newlevel != level) {
         level = newlevel;
@@ -775,17 +852,186 @@ LevelSet* LevelEditView::GetLevelSet() const {
 
 bool LevelEditView::SetTileset(const Tileset& tiles) {
     tileset = tiles;
+    // The zoomed copies were made from the old tileset/size.
+    zoomcache.clear();
+    maptileset = Tileset();
+    // Keep the current zoom percentage if possible; if the new 1:1 size makes it too
+    // large, step down until it fits.
+    while(!UpdateMapTileset() && zoomindex > ZOOM_DEFAULT_INDEX)
+        --zoomindex;
     delete mapbmp;
     mapbmp = NULL;
     if(mapwin != NULL) {
-        mapwin->SetScrollbars(GetTileW(), GetTileH(), 32, 32);
+        UpdateMapScrollbars(0, 0);
         mapwin->Refresh();
     }
     if(tilesel != NULL) {
         tilesel->SetScrollbars(GetTileW(), GetTileH(), TILESEL_WIDTH, TILESEL_HEIGHT);
         tilesel->Refresh();
     }
+    UpdateZoomLabel();
     return true;
+}
+
+int LevelEditView::GetZoomPercent() const {
+    if(zoomindex < 0 || zoomindex >= ZOOM_LEVEL_COUNT)
+        return 100;
+    return ZOOM_LEVELS[zoomindex];
+}
+
+bool LevelEditView::UpdateMapTileset() {
+    if(!tileset.IsOk()) {
+        maptileset = tileset;
+        return true;
+    }
+    const int percent = GetZoomPercent();
+    if(percent == 100) {
+        maptileset = tileset;
+        return true;
+    }
+    std::map<int, Tileset>::const_iterator it = zoomcache.find(percent);
+    if(it != zoomcache.end()) {
+        maptileset = it->second;
+        return true;
+    }
+    wxCoord w = (wxCoord) floor(GetTileW() * percent / 100.0 + 0.5);
+    wxCoord h = (wxCoord) floor(GetTileH() * percent / 100.0 + 0.5);
+    if(w < 1)
+        w = 1;
+    if(h < 1)
+        h = 1;
+    if(!Tileset::IsSizeSupported(w, h))
+        return false;
+    Tileset zoomed = tileset;
+    if(!zoomed.Resize(w, h))
+        return false;
+    // Each zoomed tileset holds a full set of bitmaps, so only keep a few.
+    if(zoomcache.size() >= 4)
+        zoomcache.clear();
+    zoomcache[percent] = zoomed;
+    maptileset = zoomed;
+    return true;
+}
+
+void LevelEditView::UpdateMapScrollbars(int viewx, int viewy) {
+    if(mapwin == NULL)
+        return;
+    const int virtw = 32 * GetMapTileW();
+    const int virth = 32 * GetMapTileH();
+    // Keep the requested view position within the map.
+    int clientw = 0, clienth = 0;
+    mapwin->GetClientSize(&clientw, &clienth);
+    viewx = std::max(0, std::min(viewx, virtw - clientw));
+    viewy = std::max(0, std::min(viewy, virth - clienth));
+    mapwin->SetScrollbars(MAP_SCROLL_UNIT, MAP_SCROLL_UNIT,
+        (virtw + MAP_SCROLL_UNIT - 1) / MAP_SCROLL_UNIT, (virth + MAP_SCROLL_UNIT - 1) / MAP_SCROLL_UNIT,
+        viewx / MAP_SCROLL_UNIT, viewy / MAP_SCROLL_UNIT, true);
+}
+
+bool LevelEditView::SetZoom(int index, const wxPoint* anchor) {
+    if(index < 0 || index >= ZOOM_LEVEL_COUNT)
+        return false;
+    if(index == zoomindex)
+        return true;
+    // Work out which point of the map (in tiles) is under the anchor.
+    wxPoint device(0, 0);
+    if(anchor != NULL) {
+        device = *anchor;
+    } else if(mapwin != NULL) {
+        int clientw = 0, clienth = 0;
+        mapwin->GetClientSize(&clientw, &clienth);
+        device = wxPoint(clientw / 2, clienth / 2);
+    }
+    double tilex = 0.0, tiley = 0.0;
+    if(mapwin != NULL && GetMapTileW() > 0 && GetMapTileH() > 0) {
+        wxPoint logical = mapwin->CalcUnscrolledPosition(device);
+        tilex = (double) logical.x / GetMapTileW();
+        tiley = (double) logical.y / GetMapTileH();
+    }
+    // Switch zoom, reverting if the new size is not supported.
+    const int oldindex = zoomindex;
+    zoomindex = index;
+    if(!UpdateMapTileset()) {
+        zoomindex = oldindex;
+        UpdateMapTileset();
+        wxBell();
+        SetStatusText(wxT("Cannot zoom further: maximum tile size reached (see MaxTileWidth/MaxTileHeight in the config)."));
+        return false;
+    }
+    delete mapbmp;
+    mapbmp = NULL;
+    // Scroll so the same map point stays under the anchor.
+    UpdateMapScrollbars((int) floor(tilex * GetMapTileW() + 0.5) - device.x,
+                        (int) floor(tiley * GetMapTileH() + 0.5) - device.y);
+    UpdateZoomLabel();
+    AddIdleRedraw(DRAW_MAP);
+    return true;
+}
+
+void LevelEditView::UpdateZoomLabel() {
+    if(zoomlabel == NULL)
+        return;
+    wxString text;
+    text << GetZoomPercent() << wxT("%  (") << GetMapTileW() << wxT("\u00D7") << GetMapTileH() << wxT(")");
+    zoomlabel->SetLabel(text);
+    if(zoomlabel->GetParent() != NULL)
+        zoomlabel->GetParent()->Layout();
+}
+
+bool LevelEditView::IsPanAvailable() const {
+    if(mapwin == NULL || level == NULL)
+        return false;
+    int clientw = 0, clienth = 0;
+    mapwin->GetClientSize(&clientw, &clienth);
+    return 32 * GetMapTileW() > clientw || 32 * GetMapTileH() > clienth;
+}
+
+wxRect LevelEditView::GetPanIconRect() const {
+    // Fixed position in the top-left corner of the visible map area (window coordinates).
+    return wxRect(6, 6, 56, 56);
+}
+
+void LevelEditView::DrawPanIcon(wxDC* dc) {
+    if(dc == NULL || mapwin == NULL)
+        return;
+    wxRect r = GetPanIconRect();
+    // The DC is set up for scrolled (map) coordinates; convert the fixed window position.
+    wxPoint p = mapwin->CalcUnscrolledPosition(r.GetTopLeft());
+    r.SetPosition(p);
+    dc->SetPen(wxPen(*wxWHITE, 1));
+    dc->SetBrush(wxBrush(panning ? wxColour(70, 110, 170) : wxColour(40, 40, 40)));
+    dc->DrawRoundedRectangle(r, 8);
+    // Four-way arrow, scaled to the icon.
+    const wxCoord cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+    const wxCoord arm = r.width / 2 - 8, head = r.width / 7;
+    dc->SetPen(wxPen(*wxWHITE, 3));
+    dc->DrawLine(cx - arm + head, cy, cx + arm - head, cy);
+    dc->DrawLine(cx, cy - arm + head, cx, cy + arm - head);
+    dc->SetPen(wxPen(*wxWHITE, 1));
+    dc->SetBrush(*wxWHITE_BRUSH);
+    wxPoint up[3] = {wxPoint(cx, cy - arm), wxPoint(cx - head, cy - arm + head + 1), wxPoint(cx + head, cy - arm + head + 1)};
+    wxPoint down[3] = {wxPoint(cx, cy + arm), wxPoint(cx - head, cy + arm - head - 1), wxPoint(cx + head, cy + arm - head - 1)};
+    wxPoint left[3] = {wxPoint(cx - arm, cy), wxPoint(cx - arm + head + 1, cy - head), wxPoint(cx - arm + head + 1, cy + head)};
+    wxPoint right[3] = {wxPoint(cx + arm, cy), wxPoint(cx + arm - head - 1, cy - head), wxPoint(cx + arm - head - 1, cy + head)};
+    dc->DrawPolygon(3, up);
+    dc->DrawPolygon(3, down);
+    dc->DrawPolygon(3, left);
+    dc->DrawPolygon(3, right);
+    dc->SetBrush(wxNullBrush);
+    dc->SetPen(wxNullPen);
+}
+
+void LevelEditView::EndPan() {
+    if(!panning)
+        return;
+    panning = false;
+    if(mapwin != NULL) {
+        if(mapwin->HasCapture())
+            mapwin->ReleaseMouse();
+        mapwin->SetCursor(wxNullCursor);
+    }
+    panhover = false;
+    AddIdleRedraw(DRAW_MAP);
 }
 
 bool LevelEditView::SetTileSize(wxCoord w, wxCoord h) {
@@ -817,31 +1063,30 @@ bool LevelEditView::SetSelectedTool(Tool tool) {
         return false;
     tilelist->SetSelection(tool);
     if(tilesel != NULL)
-        tilesel->Refresh();
+        tilesel->RepaintNow();
     return true;
 }
 
 void LevelEditView::SetSelection(wxUint32 x, wxUint32 y, wxUint32 w, wxUint32 h) {
     if(x == selx && y == sely && w == selw && h == selh)
         return;
-    if(mapwin != NULL && mapbmp != NULL) {
-        // Erase (the rendering of) the old selection and draw the new selection.
-        wxDC* dc = NewClientDC();
-        EraseSelection(dc);
-        selx = x;
-        sely = y;
-        selw = w;
-        selh = h;
-        DrawSelection(dc);
-        delete dc;
-        AddIdleRedraw(DRAW_WIRES);
-    } else {
-        selx = x;
-        sely = y;
-        selw = w;
-        selh = h;
-        AddIdleRedraw(DRAW_MAP);
-    }
+    selx = x;
+    sely = y;
+    selw = w;
+    selh = h;
+    // The paint handler draws the map, selection and wires from the backing bitmap.
+    AddIdleRedraw(DRAW_MAP);
+}
+
+void LevelEditView::AddIdleRedraw(DrawSpec spec) {
+    if(spec == DRAW_NONE)
+        return;
+    // Refresh() only marks the window as needing a repaint; the toolkit coalesces
+    // multiple requests, so calling this often (e.g. while dragging) is cheap.
+    if(mapwin != NULL)
+        mapwin->RepaintNow();
+    if(spec == DRAW_ALL && tilesel != NULL)
+        tilesel->RepaintNow();
 }
 
 void LevelEditView::SetStatusText(const wxString& text, int i) {
@@ -870,22 +1115,14 @@ bool LevelEditView::InitTileset() {
     return tileset.IsOk();
 }
 
-wxDC* LevelEditView::NewClientDC() {
-    if(mapwin == NULL)
-        return NULL;
-    wxDC* dc = new wxClientDC(mapwin);
-    mapwin->DoPrepareDC(*dc);
-    return dc;
-}
-
 wxMemoryDC* LevelEditView::NewBackingDC() {
     wxMemoryDC* backingdc = NULL;
     if(mapbmp == NULL) {
-        mapbmp = new wxBitmap(32 * GetTileW(), 32 * GetTileH());
+        mapbmp = new wxBitmap(32 * GetMapTileW(), 32 * GetMapTileH());
         backingdc = new wxMemoryDC;
         if(backingdc != NULL) {
             backingdc->SelectObject(*mapbmp);
-            tileset.DrawLevel(level, backingdc, 0, 0, showupper);
+            maptileset.DrawLevel(level, backingdc, 0, 0, showupper);
         }
     } else {
         backingdc = new wxMemoryDC;
@@ -899,63 +1136,34 @@ void LevelEditView::OnDraw(wxDC* dc) {
     if(dc == NULL || level == NULL || !InitTileset())
         return;
     wxMemoryDC* backingdc = NewBackingDC();
+    if(backingdc == NULL || mapbmp == NULL)
+        return;
     dc->Blit(0, 0, mapbmp->GetWidth(), mapbmp->GetHeight(), backingdc, 0, 0);
+    // Deselect the bitmap so it can be safely modified or deleted later.
+    backingdc->SelectObject(wxNullBitmap);
     delete backingdc;
     DrawSelection(dc);
     DrawWires(dc);
+    if(IsPanAvailable())
+        DrawPanIcon(dc);
 }
 
-void LevelEditView::DrawSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w, wxUint32 h) {
+void LevelEditView::DrawSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w, wxUint32 h, wxCoord tilew, wxCoord tileh) {
     if(dc != NULL && x < 32 && y < 32 && w > 0 && h > 0) {
-        wxCoord thickness = std::max(1, std::min(GetTileW() / 8, GetTileH() / 8));
+        wxCoord thickness = std::max(1, std::min(tilew / 8, tileh / 8));
         wxPen pen(*wxBLACK, thickness);
         pen.SetCap(wxCAP_PROJECTING);
         pen.SetJoin(wxJOIN_ROUND);
         dc->SetPen(pen);
         dc->SetBrush(*wxTRANSPARENT_BRUSH);
-        dc->DrawRectangle((wxCoord) x * GetTileW(), (wxCoord) y * GetTileH(), (wxCoord) w * GetTileW(), (wxCoord) h * GetTileH());
+        dc->DrawRectangle((wxCoord) x * tilew, (wxCoord) y * tileh, (wxCoord) w * tilew, (wxCoord) h * tileh);
         wxPen pen2(*wxWHITE, std::max(1, thickness - 2), wxPENSTYLE_LONG_DASH);
         pen2.SetCap(wxCAP_PROJECTING);
         pen2.SetJoin(wxJOIN_ROUND);
         dc->SetPen(pen2);
-        dc->DrawRectangle((wxCoord) x * GetTileW(), (wxCoord) y * GetTileH(), (wxCoord) w * GetTileW(), (wxCoord) h * GetTileH());
+        dc->DrawRectangle((wxCoord) x * tilew, (wxCoord) y * tileh, (wxCoord) w * tilew, (wxCoord) h * tileh);
         dc->SetBrush(wxNullBrush);
         dc->SetPen(wxNullPen);
-    }
-}
-
-void LevelEditView::EraseSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w, wxUint32 h) {
-    if(dc != NULL && x < 32 && y < 32 && w > 0 && h > 0) {
-        wxCoord thickness = std::max(1, std::min(GetTileW() / 8, GetTileH() / 8));
-        // Get half of the thickness, rounded up to make sure we cover whatever alignment the pen uses.
-        wxCoord halfThickness = (thickness + 1) / 2;
-        // Now also apply this rounding to the actual thickness, again to make sure we get complete coverage.
-        thickness = halfThickness * 2;
-        // Determine coordinates.
-        wxCoord outerLeft = (wxCoord) x * GetTileW() - halfThickness;
-        wxCoord outerRight = (wxCoord) (x + w) * GetTileW() + halfThickness - 1;
-        wxCoord innerRight = (wxCoord) (x + w) * GetTileW() - halfThickness - 1;
-        wxCoord outerWidth = (wxCoord) w * GetTileW() + thickness;
-        wxCoord outerTop = (wxCoord) y * GetTileH() - halfThickness;
-        wxCoord innerTop = (wxCoord) y * GetTileH() + halfThickness;
-        wxCoord outerBottom = (wxCoord) (y + h) * GetTileH() + halfThickness - 1;
-        wxCoord innerBottom = (wxCoord) (y + h) * GetTileH() - halfThickness - 1;
-        wxCoord innerHeight = (wxCoord) h * GetTileH() - thickness;
-        if(outerRight < 32 * GetTileW() && outerBottom < 32 * GetTileH()) {
-            // Redraw the areas of the level map that were covered by the selection border.
-            wxMemoryDC* backingdc = NewBackingDC();
-            dc->Blit(outerLeft, outerTop, outerWidth, thickness, backingdc, outerLeft, outerTop); // Top border, including corners.
-            dc->Blit(outerLeft, innerBottom, outerWidth, thickness, backingdc, outerLeft, innerBottom); // Bottom border, including corners.
-            dc->Blit(outerLeft, innerTop, thickness, innerHeight, backingdc, outerLeft, innerTop); // Left border, excluding corners.
-            dc->Blit(innerRight, innerTop, thickness, innerHeight, backingdc, innerRight, innerTop); // Right border, excluding corners.
-            delete backingdc;
-        } else {
-            // The selection border went outside the level map area, so clear and redraw everything.
-            dc->Clear();
-            wxMemoryDC* backingdc = NewBackingDC();
-            dc->Blit(0, 0, 32 * GetTileW(), 32 * GetTileH(), backingdc, 0, 0);
-            delete backingdc;
-        }
     }
 }
 
@@ -965,8 +1173,8 @@ void LevelEditView::DrawWires(wxDC* dc, bool force) {
             wxPen pen(wxColour(116, 96, 0));
             dc->SetPen(pen);
             for(std::list<WireRecord>::const_iterator it = level->trapwires.begin(); it != level->trapwires.end(); ++it) {
-                dc->DrawLine((wxCoord) it->buttonx * GetTileW() + GetTileW() / 2, (wxCoord) it->buttony * GetTileH() + GetTileH() / 2,
-                            (wxCoord) it->targetx * GetTileW() + GetTileW() / 2, (wxCoord) it->targety * GetTileH() + GetTileH() / 2);
+                dc->DrawLine((wxCoord) it->buttonx * GetMapTileW() + GetMapTileW() / 2, (wxCoord) it->buttony * GetMapTileH() + GetMapTileH() / 2,
+                            (wxCoord) it->targetx * GetMapTileW() + GetMapTileW() / 2, (wxCoord) it->targety * GetMapTileH() + GetMapTileH() / 2);
             }
             dc->SetPen(wxNullPen);
         }
@@ -974,8 +1182,8 @@ void LevelEditView::DrawWires(wxDC* dc, bool force) {
             wxPen pen(wxColour(200, 0, 0));
             dc->SetPen(pen);
             for(std::list<WireRecord>::const_iterator it = level->clonewires.begin(); it != level->clonewires.end(); ++it) {
-                dc->DrawLine((wxCoord) it->buttonx * GetTileW() + GetTileW() / 2, (wxCoord) it->buttony * GetTileH() + GetTileH() / 2,
-                            (wxCoord) it->targetx * GetTileW() + GetTileW() / 2, (wxCoord) it->targety * GetTileH() + GetTileH() / 2);
+                dc->DrawLine((wxCoord) it->buttonx * GetMapTileW() + GetMapTileW() / 2, (wxCoord) it->buttony * GetMapTileH() + GetMapTileH() / 2,
+                            (wxCoord) it->targetx * GetMapTileW() + GetMapTileW() / 2, (wxCoord) it->targety * GetMapTileH() + GetMapTileH() / 2);
             }
             dc->SetPen(wxNullPen);
         }
@@ -1036,7 +1244,7 @@ void LevelEditView::DrawTileSelector(wxDC* dc) {
         dc->SetPen(wxNullPen);
     }
     if(selX >= 0 && selY >= 0) {
-        DrawSelection(dc, selX, selY);
+        DrawSelection(dc, selX, selY, 1, 1, GetTileW(), GetTileH());
     }
 }
 
@@ -1092,23 +1300,22 @@ void LevelEditView::OnUpdate(wxView* sender, wxObject* hint) {
         AddIdleRedraw(DRAW_ALL);
     } else if(lhint->level == level || lhint->level == NULL) {
         if(lhint->type == LevelUpdateHint::TILE && lhint->x < 32 && lhint->y < 32) {
-            if(mapbmp != NULL && level != NULL && tileset.IsOk() && mapwin != NULL) {
-                // Only redraw the specific tile that has been changed.
-                wxMemoryDC dc2;
-                dc2.SelectObject(*mapbmp);
-                Tile upper, lower;
-                if(showupper) {
-                    upper = level->GetUpperTile(lhint->x, lhint->y);
-                    lower = level->GetLowerTile(lhint->x, lhint->y);
-                } else {
-                    upper = level->GetLowerTile(lhint->x, lhint->y);
-                    lower = TILE_FLOOR;
-                }
-                tileset.DrawPair(upper, lower, &dc2, lhint->x * GetTileW(), lhint->y * GetTileH());
-                wxDC* dc = NewClientDC();
-                if(dc != NULL) {
-                    dc->Blit(lhint->x * GetTileW(), lhint->y * GetTileH(), GetTileW(), GetTileH(), &dc2, lhint->x * GetTileW(), lhint->y * GetTileH());
-                    delete dc;
+            if(mapbmp != NULL && level != NULL && maptileset.IsOk() && mapwin != NULL) {
+                // Update only the changed tile in the backing bitmap, then ask
+                // the window to repaint; the paint handler blits the bitmap.
+                {
+                    wxMemoryDC dc2;
+                    dc2.SelectObject(*mapbmp);
+                    Tile upper, lower;
+                    if(showupper) {
+                        upper = level->GetUpperTile(lhint->x, lhint->y);
+                        lower = level->GetLowerTile(lhint->x, lhint->y);
+                    } else {
+                        upper = level->GetLowerTile(lhint->x, lhint->y);
+                        lower = TILE_FLOOR;
+                    }
+                    maptileset.DrawPair(upper, lower, &dc2, lhint->x * GetMapTileW(), lhint->y * GetMapTileH());
+                    dc2.SelectObject(wxNullBitmap);
                 }
                 AddIdleRedraw(DRAW_MAP);
             } else {
@@ -1129,23 +1336,6 @@ void LevelEditView::OnUpdate(wxView* sender, wxObject* hint) {
         }
     }
     wxView::OnUpdate(sender, hint);
-}
-
-void LevelEditView::OnIdle(wxIdleEvent& event) {
-    event.Skip();
-    DrawSpec draw = idleredraw;
-    idleredraw = DRAW_NONE; // In case of reentrance.
-    if(draw == DRAW_NONE) {
-    } else if(draw == DRAW_WIRES) {
-        wxDC* dc = NewClientDC();
-        DrawWires(dc);
-        delete dc;
-    } else if(draw == DRAW_MAP) {
-        if(mapwin != NULL)
-            mapwin->Refresh();
-    } else {
-        Refresh();
-    }
 }
 
 void LevelEditView::OnMouse(wxMouseEvent& event) {
@@ -1171,13 +1361,88 @@ void LevelEditView::OnMouse(wxMouseEvent& event) {
             status << wxT(" [Cursor: ") << GetToolName(hover) << wxT("]");
         SetStatusText(status);
     } else if(event.GetEventObject() == mapwin) {
+        // Mouse wheel zooms the map, keeping the point under the mouse in place.
+        if(event.GetEventType() == wxEVT_MOUSEWHEEL) {
+#if wxCHECK_VERSION(2, 9, 0)
+            if(event.GetWheelAxis() != wxMOUSE_WHEEL_VERTICAL)
+                return; // Let horizontal scrolling through.
+#endif
+            event.Skip(false);
+            const int delta = (event.GetWheelDelta() > 0) ? event.GetWheelDelta() : 120;
+            wheelrotation += event.GetWheelRotation();
+            const wxPoint pos = event.GetPosition();
+            // Smooth-scrolling devices send small steps; accumulate them.
+            while(wheelrotation >= delta) {
+                wheelrotation -= delta;
+                ZoomBy(1, &pos);
+            }
+            while(wheelrotation <= -delta) {
+                wheelrotation += delta;
+                ZoomBy(-1, &pos);
+            }
+            return;
+        }
+        // Dragging the move icon moves the view. The cursor is held where the drag
+        // started and the view moves by however far the mouse is pushed, so the drag
+        // distance is unlimited. The hold always ends when the button is released,
+        // capture is lost or the view closes (see EndPan).
+        if(panning) {
+            if(event.Dragging() || event.Moving()) {
+                const wxPoint pos = event.GetPosition();
+                const wxPoint delta = pos - panlast;
+                panlast = pos;
+                if(panwarp && (abs(delta.x) > 250 || abs(delta.y) > 250)) {
+                    // Moving the cursor back is not working (e.g. not supported by the
+                    // display server); fall back to ordinary dragging.
+                    panwarp = false;
+                } else if(delta.x != 0 || delta.y != 0) {
+                    int clientw = 0, clienth = 0;
+                    mapwin->GetClientSize(&clientw, &clienth);
+                    const int maxx = std::max(0, 32 * GetMapTileW() - clientw);
+                    const int maxy = std::max(0, 32 * GetMapTileH() - clienth);
+                    panview.x = std::max(0, std::min(maxx, panview.x - delta.x));
+                    panview.y = std::max(0, std::min(maxy, panview.y - delta.y));
+                    mapwin->Scroll(panview.x / MAP_SCROLL_UNIT, panview.y / MAP_SCROLL_UNIT);
+                }
+                if(panwarp && pos != panlock) {
+                    mapwin->WarpPointer(panlock.x, panlock.y);
+                    panlast = panlock;
+                }
+            }
+            if(event.LeftUp() || !event.LeftIsDown())
+                EndPan();
+            return;
+        }
+        const bool overpanicon = activebutton == wxMOUSE_BTN_NONE && IsPanAvailable() && GetPanIconRect().Contains(event.GetPosition());
+        if(overpanicon != panhover) {
+            panhover = overpanicon;
+            mapwin->SetCursor(overpanicon ? wxCursor(wxCURSOR_HAND) : wxNullCursor);
+        }
+        if(overpanicon) {
+            if(event.LeftDown()) {
+                panning = true;
+                panwarp = true;
+                panlock = panlast = event.GetPosition();
+                int viewx = 0, viewy = 0, unitx = 1, unity = 1;
+                mapwin->GetViewStart(&viewx, &viewy);
+                mapwin->GetScrollPixelsPerUnit(&unitx, &unity);
+                panview = wxPoint(viewx * unitx, viewy * unity);
+                if(!mapwin->HasCapture())
+                    mapwin->CaptureMouse();
+                mapwin->SetCursor(wxCursor(wxCURSOR_SIZING));
+                AddIdleRedraw(DRAW_MAP);
+            }
+            // Clicks on the icon never edit the map underneath it.
+            SetStatusText(wxT("Drag to move the view."));
+            return;
+        }
         if(level == NULL)
             return;
         int origx = 32, origy = 32;
-        if(GetTileW() > 0 && GetTileH() > 0) {
-            mapwin->GetViewStart(&origx, &origy);
-            origx += event.GetX() / GetTileW();
-            origy += event.GetY() / GetTileH();
+        if(GetMapTileW() > 0 && GetMapTileH() > 0) {
+            wxPoint logical = mapwin->CalcUnscrolledPosition(event.GetPosition());
+            origx = (logical.x >= 0) ? logical.x / GetMapTileW() : -1;
+            origy = (logical.y >= 0) ? logical.y / GetMapTileH() : -1;
         }
         Tool sel = GetSelectedTool();
         wxString status;

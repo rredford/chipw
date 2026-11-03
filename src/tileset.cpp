@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -20,6 +22,8 @@
 #include "refcount.h"
 #include <istream>
 #include <fstream>
+#include <map>
+#include <utility>
 #include <wx/image.h>
 #include <wx/bitmap.h>
 #include <wx/dc.h>
@@ -29,6 +33,7 @@
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/confbase.h>
+#include <wx/font.h>
 
 namespace ChipW {
 
@@ -92,7 +97,7 @@ inline bool CheckOk(const wxNuisance& nuisance) {return nuisance.Ok();}
 inline void BmpCopy(wxBitmap& to, const wxBitmap& from) {to = from.GetSubBitmap(wxRect(0, 0, from.GetWidth(), from.GetHeight()));}
 #endif
 
-bool CheckMaxSize(wxCoord w, wxCoord h) {
+bool CheckMaxSize(wxCoord w, wxCoord h, bool quiet = false) {
     wxConfigBase* config = wxConfigBase::Get();
     long maxw = 128, maxh = 128, maxarea = 16384;
     if(config != NULL) {
@@ -101,15 +106,15 @@ bool CheckMaxSize(wxCoord w, wxCoord h) {
         config->Read(wxT("MaxTileArea"), &maxarea);
     }
     if(maxw > 0 && w > maxw) {
-        wxLogError(wxT("The maximum supported tile width is %i."), (int) maxw);
+        if(!quiet) wxLogError(wxT("The maximum supported tile width is %i."), (int) maxw);
         return false;
     }
     if(maxh > 0 && h > maxh) {
-        wxLogError(wxT("The maximum supported tile height is %i."), (int) maxh);
+        if(!quiet) wxLogError(wxT("The maximum supported tile height is %i."), (int) maxh);
         return false;
     }
     if(maxarea > 0 && w > 0 && h > 0 && w * h > maxarea) {
-        wxLogError(wxT("The maximum supported tile area is %i."), (int) maxarea);
+        if(!quiet) wxLogError(wxT("The maximum supported tile area is %i."), (int) maxarea);
         return false;
     }
     return true;
@@ -389,6 +394,100 @@ bool DoLoad(TilesetData* data, wxCoord& w, wxCoord& h) {
     return true;
 }
 
+// Returns the largest bold font whose two-digit hex labels fit within roughly 85% of
+// a w x h box (an invalid font if none fits). Results are cached per box size,
+// since labels are drawn in a few sizes (whole tile, top band, hole).
+wxFont GetInvalidLabelFont(wxDC* target, wxCoord w, wxCoord h) {
+    static std::map<std::pair<wxCoord, wxCoord>, wxFont> cache;
+    const std::pair<wxCoord, wxCoord> key(w, h);
+    std::map<std::pair<wxCoord, wxCoord>, wxFont>::const_iterator it = cache.find(key);
+    if(it != cache.end())
+        return it->second;
+    wxFont result;
+    if(w >= 6 && h >= 4) {
+        const wxCoord maxw = w * 85 / 100;
+        const wxCoord maxh = h * 85 / 100;
+        // The widest hex digits, so that every label fits.
+        const wxChar* samples[] = {wxT("88"), wxT("DD"), wxT("00"), wxT("BB")};
+        for(int px = h; px >= 4; px -= (px > 20 ? 2 : 1)) {
+            wxFont font(wxSize(0, px), wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+            target->SetFont(font);
+            bool fits = true;
+            for(unsigned int i = 0; i < sizeof(samples) / sizeof(samples[0]) && fits; ++i) {
+                wxCoord tw = 0, th = 0;
+                target->GetTextExtent(samples[i], &tw, &th);
+                fits = (tw <= maxw && th <= maxh);
+            }
+            if(fits) {
+                result = font;
+                break;
+            }
+        }
+        target->SetFont(wxNullFont);
+    }
+    if(cache.size() > 64)
+        cache.clear();
+    cache[key] = result;
+    return result;
+}
+
+// Draws the hex value of an invalid tile byte (e.g. "F4") in white, centred in the
+// given box, as large as fits with a small margin.
+void DrawInvalidLabel(wxDC* target, wxUint32 tile, wxCoord x, wxCoord y, wxCoord w, wxCoord h) {
+    if(target == NULL)
+        return;
+    wxFont font = GetInvalidLabelFont(target, w, h);
+    if(!font.IsOk())
+        return;
+    wxString label = wxString::Format(wxT("%02X"), (unsigned int) (tile & 0xFF));
+    target->SetFont(font);
+    wxCoord tw = 0, th = 0;
+    target->GetTextExtent(label, &tw, &th);
+    target->SetTextForeground(*wxWHITE);
+    target->SetBackgroundMode(wxTRANSPARENT);
+    target->DrawText(label, x + (w - tw) / 2, y + (h - th) / 2);
+    target->SetFont(wxNullFont);
+}
+
+// Draws an invalid upper tile over an already-drawn lower tile: black, with its label
+// in the top part and a hole outlined in white in the bottom part through which the
+// lower tile shows. If the lower tile is also invalid, its label is drawn in the hole.
+void DrawInvalidOver(wxDC* target, wxUint32 upper, wxUint32 lower, bool lowerinvalid,
+                     wxCoord x, wxCoord y, wxCoord w, wxCoord h) {
+    // Hole: centred horizontally, in the bottom ~half of the tile.
+    const wxCoord holex = x + w / 5;
+    const wxCoord holew = w - 2 * (w / 5);
+    const wxCoord holey = y + h * 45 / 100;
+    const wxCoord holeh = (y + h - h / 10) - holey;
+    if(holew < 4 || holeh < 4) {
+        // Too small for a hole: plain black tile with a white border as a hint.
+        target->SetPen(*wxWHITE_PEN);
+        target->SetBrush(*wxBLACK_BRUSH);
+        target->DrawRectangle(x, y, w, h);
+        target->SetBrush(wxNullBrush);
+        target->SetPen(wxNullPen);
+        DrawInvalidLabel(target, upper, x, y, w, h);
+        return;
+    }
+    // Black everywhere except the hole.
+    target->SetPen(*wxTRANSPARENT_PEN);
+    target->SetBrush(*wxBLACK_BRUSH);
+    target->DrawRectangle(x, y, w, holey - y);                                   // above
+    target->DrawRectangle(x, holey + holeh, w, (y + h) - (holey + holeh));       // below
+    target->DrawRectangle(x, holey, holex - x, holeh);                            // left
+    target->DrawRectangle(holex + holew, holey, (x + w) - (holex + holew), holeh); // right
+    // Thin white outline around the hole.
+    target->SetPen(*wxWHITE_PEN);
+    target->SetBrush(*wxTRANSPARENT_BRUSH);
+    target->DrawRectangle(holex, holey, holew, holeh);
+    target->SetBrush(wxNullBrush);
+    target->SetPen(wxNullPen);
+    // Labels: upper in the top band, lower (if invalid) inside the hole.
+    DrawInvalidLabel(target, upper, x, y, w, holey - y);
+    if(lowerinvalid)
+        DrawInvalidLabel(target, lower, holex + 1, holey + 1, holew - 2, holeh - 2);
+}
+
 bool IsCCToolsINI(const wxString& filename) {
     if(filename.empty())
         return false;
@@ -567,6 +666,10 @@ bool Tileset::Resize(wxCoord width, wxCoord height) {
     return true;
 }
 
+bool Tileset::IsSizeSupported(wxCoord width, wxCoord height) {
+    return width > 0 && height > 0 && CheckMaxSize(width, height, true);
+}
+
 wxCoord Tileset::GetNativeTileWidth() const {
     if(data == NULL || !CheckOk(data->img))
         return 0;
@@ -584,10 +687,10 @@ bool Tileset::DrawTile(Tile tile, wxDC* target, wxCoord x, wxCoord y) {
         return true;
     if(data == NULL)
         return false;
+    Tile drawn = (tile > TILE_MAX_VALID) ? (Tile) TILE_INVALID : tile;
+    target->DrawBitmap(data->bmpu[drawn], x, y, true);
     if(tile > TILE_MAX_VALID)
-        tile = TILE_INVALID;
-    else
-        target->DrawBitmap(data->bmpu[tile], x, y, true);
+        DrawInvalidLabel(target, tile, x, y, w, h);
     return CheckOk(*target);
 }
 
@@ -596,15 +699,26 @@ bool Tileset::DrawPair(Tile upper, Tile lower, wxDC* target, wxCoord x, wxCoord 
         return true;
     if(data == NULL)
         return false;
+    // Remember the real bytes so invalid tiles can be labelled with their value.
+    const Tile realupper = upper, reallower = lower;
     if(upper > TILE_MAX_VALID)
         upper = TILE_INVALID;
     if(lower > TILE_MAX_VALID)
         lower = TILE_INVALID;
     if(lower == TILE_FLOOR) {
         target->DrawBitmap(data->bmpf[upper], x, y, false);
+        if(realupper > TILE_MAX_VALID)
+            DrawInvalidLabel(target, realupper, x, y, w, h);
     } else {
         target->DrawBitmap(data->bmpf[lower], x, y, false);
-        target->DrawBitmap(data->bmpu[upper], x, y, true);
+        if(realupper > TILE_MAX_VALID) {
+            // Invalid tile on top of something: show what is underneath through a hole.
+            DrawInvalidOver(target, realupper, reallower, reallower > TILE_MAX_VALID, x, y, w, h);
+        } else {
+            if(reallower > TILE_MAX_VALID)
+                DrawInvalidLabel(target, reallower, x, y, w, h);
+            target->DrawBitmap(data->bmpu[upper], x, y, true);
+        }
     }
     return CheckOk(*target);
 }

@@ -33,9 +33,9 @@
 <div id="bugreport">
 <h2>Bug reports</h2>
 <p>
-  Chip's Workshop is still in the beta phase, and so it is likely to have quite a few bugs.
-  If something doesn't seem to work properly, please report the problem to
-  <a href="mailto:chipw@chrise.me.uk">chipw@chrise.me.uk</a>.
+  This copy of Chip's Workshop is an unofficial, modified fork of version 2.0.7. It adds fixes for modern Linux desktops,
+  map zoom, view dragging and labelled invalid tiles (see the ChangeLog file for details).
+  Please report problems with this version on the fork's GitHub page (the &quot;Issues&quot; tab), not to the original author.
 </p>
 </div>
 <div id="start">
@@ -163,8 +163,19 @@
   <li>Show wires - uncheck this if the wires are obstructing your view of the level.</li>
   <li>Show upper layer - uncheck this to hide the top tile from each location to provide a better view of buried tiles.</li>
   <li>Select tileset - use this to choose a different set of tile images.</li>
-  <li>Scale tiles - use this to adjust the size of the tiles.</li>
+  <li>Scale tiles - use this to adjust the size of the tiles. This size is used as the 1:1 zoom level.</li>
 </ul>
+<p>
+  The bar above the level map controls the zoom. The &minus; and + buttons zoom out and in, and 1:1 returns to the size set with Scale tiles.
+  The current zoom and tile size are shown next to the buttons. You can also zoom by turning the mouse wheel over the map; the tile under the
+  mouse pointer stays where it is. The zoom levels run from 25% to 800%, but the largest available depends on the maximum tile size
+  (see <a href="#advanced">Advanced options</a>). The zoom only affects the level map, not the tile selector.
+</p>
+<p>
+  When the map is larger than the window, a move icon (four arrows) appears in the top-left corner of the map. Hold the left mouse button
+  on it and move the mouse to move the view. The mouse pointer stays in place while you drag, so you can move any distance;
+  it is released as soon as you let go of the button. Clicking the icon never changes the map underneath it.
+</p>
 <p>
   You can also create multiple windows for the same level set, each of which can have different view settings, and a different level selected.
 </p>
@@ -274,6 +285,11 @@
 </p>
 <p>
   If you wish to place these invalid tile codes in your own levels, you may select any 8-bit tile code from the &quot;IDs&quot; tab on the left.
+</p>
+<p>
+  Tile codes above 6F, which have no image, are drawn on the map as black squares showing the hexadecimal code in white.
+  If such a tile is on top of another tile, its code is shown at the top and the tile underneath can be seen through an outlined hole in
+  the lower part; if the tile underneath is also invalid, its code is shown inside the hole.
 </p>
 <h3>Advanced properties</h3>
 <p>

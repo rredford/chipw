@@ -1,4 +1,14 @@
 
+2026-11-02: version 2.0.7, modified fork (not an official release by the original author)
+* Fixed the level map and tile selector not redrawing until the window was resized on wxWidgets 3.2 / GTK3:
+  - the XIM input method (GTK_IM_MODULE=xim) is now switched off for this program at startup
+  - all drawing now happens in the paint handler (no direct drawing with wxClientDC)
+  - the tileset is loaded before the first paint, and the tile selector repaints when its tab is shown
+* Added map zoom (25% to 800%) with buttons above the map and mouse wheel zoom centred on the pointer
+* Added a move icon for dragging the view when the map is larger than the window
+* Invalid tile codes above 6F are now drawn as black squares labelled with their hexadecimal code
+* Fixed level saving starting its run-length encoding from an uninitialised value, which could write a zero-length run
+
 2021-05-25: version 2.0.7
 * Changed selection display to use a border rather than inversion (which was broken on some systems)
 * Had an accident with a time machine and landed almost a decade in the future

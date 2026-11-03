@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -443,7 +445,9 @@ bool Level::Save_SubMSCC(std::ostream& stream, bool savelen) const {
     {
         wxUint8 tile, len;
         wxUint16 pos;
-        // Upper.
+        // Upper. Start the first run with the first tile, so that no run (and
+        // in particular no zero-length run) is emitted from an uninitialised value.
+        tile = upper[0];
         len = 0;
         for(pos = 0; pos < 1024; ++pos) {
             if(len < 255 && upper[pos] == tile) {
@@ -473,7 +477,9 @@ bool Level::Save_SubMSCC(std::ostream& stream, bool savelen) const {
             dataupper.push_back(len);
             dataupper.push_back(tile);
         }
-        // Lower.
+        // Lower. Likewise, start with the first lower tile rather than whatever
+        // tile the upper layer ended with.
+        tile = lower[0];
         len = 0;
         for(pos = 0; pos < 1024; ++pos) {
             if(len < 255 && lower[pos] == tile) {

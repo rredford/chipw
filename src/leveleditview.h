@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -18,13 +20,16 @@
 
 #include <wx/docview.h>
 #include <wx/event.h>
+#include <wx/notebook.h>
 #include "tileset.h"
 #include "level.h"
+#include <map>
 
 class wxBitmap;
 class wxListBox;
 class wxStatusBar;
 class wxDC;
+class wxStaticText;
 
 namespace ChipW {
 
@@ -53,8 +58,20 @@ public:
     const Tileset& GetTileset() const {return tileset;}
     bool SetTileset(const Tileset& tiles);
     bool InitTileset();
+    // Tile size at 1:1 (as set by "Scale tiles"); used by the tile selector.
     wxCoord GetTileW() const {return tileset.GetTileWidth();}
     wxCoord GetTileH() const {return tileset.GetTileHeight();}
+    // Tile size on the level map at the current zoom.
+    wxCoord GetMapTileW() const {return maptileset.IsOk() ? maptileset.GetTileWidth() : GetTileW();}
+    wxCoord GetMapTileH() const {return maptileset.IsOk() ? maptileset.GetTileHeight() : GetTileH();}
+    // Zoom. The index refers to the table of zoom percentages in leveleditview.cpp.
+    int GetZoomPercent() const;
+    // Changes the zoom, keeping the map point under 'anchor' (window coordinates) in place.
+    // If anchor is NULL, the centre of the map window is used.
+    bool SetZoom(int index, const wxPoint* anchor = NULL);
+    bool ZoomBy(int steps, const wxPoint* anchor = NULL) {return SetZoom(zoomindex + steps, anchor);}
+    // Ends a drag-to-move of the map view, if one is in progress.
+    void EndPan();
     bool SetTileSize(wxCoord w = -1, wxCoord h = -1);
     typedef wxUint16 Tool;
     enum {
@@ -83,14 +100,20 @@ private:
     void OnCommand(wxCommandEvent& event);
     void OnUpdateUI(wxUpdateUIEvent& event);
     void OnListBox(wxCommandEvent& event);
-    void OnIdle(wxIdleEvent& event);
+    void OnNotebookPageChanged(wxNotebookEvent& event);
 //    void SendUpdate(wxObject* hint = NULL, bool self = true, bool modify = true);
-    wxDC* NewClientDC();
     wxMemoryDC* NewBackingDC();
-    void DrawSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w = 1, wxUint32 h = 1);
-    void DrawSelection(wxDC* dc) {DrawSelection(dc, selx, sely, selw, selh);}
-    void EraseSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w = 1, wxUint32 h = 1);
-    void EraseSelection(wxDC* dc) {EraseSelection(dc, selx, sely, selw, selh);}
+    void DrawSelection(wxDC* dc, wxUint32 x, wxUint32 y, wxUint32 w, wxUint32 h, wxCoord tilew, wxCoord tileh);
+    void DrawSelection(wxDC* dc) {DrawSelection(dc, selx, sely, selw, selh, GetMapTileW(), GetMapTileH());}
+    // Rebuilds the zoomed tileset used to draw the map. Returns false if the size is not supported.
+    bool UpdateMapTileset();
+    // Applies the map's virtual size/scroll position for the current zoom.
+    void UpdateMapScrollbars(int viewx, int viewy);
+    void UpdateZoomLabel();
+    // Move overlay (drag it to move the view when the map does not fit).
+    bool IsPanAvailable() const;
+    wxRect GetPanIconRect() const;
+    void DrawPanIcon(wxDC* dc);
     void DrawWires(wxDC* dc, bool force = false);
     bool DoTileAction(wxUint32 x, wxUint32 y, wxUint32 tile, wxString action/*, LevelUpdateHint& hint*/, bool single = true);
     bool DoTileActionSel(wxUint32 tile, wxString action/*, LevelUpdateHint& hint*/);
@@ -100,9 +123,24 @@ private:
         DRAW_MAP,
         DRAW_ALL,
     };
-    void AddIdleRedraw(DrawSpec spec) {if(spec > idleredraw) idleredraw = spec;}
+    // Schedules a repaint of the map (and, for DRAW_ALL, the tile selector).
+    // On modern toolkits (GTK3, Wayland) drawing must happen inside the paint
+    // handler, so all screen updates go through Refresh() instead of drawing
+    // directly with a wxClientDC.
+    void AddIdleRedraw(DrawSpec spec);
     CountedPtr<Level> level;
     Tileset tileset;
+    Tileset maptileset;
+    std::map<int, Tileset> zoomcache;
+    int zoomindex;
+    int wheelrotation;
+    bool panning;
+    bool panhover;
+    wxPoint panlock;     // Where the cursor is held during a drag (window coordinates).
+    wxPoint panlast;     // Last cursor position seen during a drag.
+    wxPoint panview;     // View position being dragged to (map pixels).
+    bool panwarp;        // Whether the cursor is being moved back to panlock.
+    wxStaticText* zoomlabel;
     static bool loadeddefaulttileset;
     static Tileset defaulttileset;
     wxUint32 selx, sely, selw, selh;
@@ -112,7 +150,6 @@ private:
     bool showupper;
     int activebutton;
     bool buttonswap;
-    DrawSpec idleredraw;
     LevelMapWindow* mapwin;
     wxStatusBar* statusbar;
     wxBitmap* mapbmp;

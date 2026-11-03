@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -32,6 +34,9 @@ enum {
     ID_CLOSEVIEW,
     ID_ROTATE_TILE_ANTICLOCKWISE,
     ID_ROTATE_TILE_CLOCKWISE,
+    ID_ZOOM_IN,
+    ID_ZOOM_OUT,
+    ID_ZOOM_RESET,
     ID_PLAYTEST_CONFIG,
     ID_PLAYTEST_MIN,
     ID_PLAYTEST_MAX = ID_PLAYTEST_MIN + 8,

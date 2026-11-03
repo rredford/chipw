@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -36,7 +38,13 @@ bool BufferedScrolledWindow::Create(wxWindow* parent, wxWindowID id, const wxPoi
 long style, const wxString& name) {
     if(!wxScrolledWindow::Create(parent, id, pos, size, style, name))
         return false;
+    // We paint the whole window ourselves in OnPaint, so tell the toolkit not
+    // to erase the background first (avoids flicker).
+#if wxCHECK_VERSION(2, 9, 1)
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+#else
     SetBackgroundStyle(wxBG_STYLE_CUSTOM);
+#endif
     return true;
 }
 

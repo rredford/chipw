@@ -1,5 +1,7 @@
 // Chip's Workshop - a level editor for Chip's Challenge.
 // Copyright 2008-2011,2021 Christopher Elsby <chrise@chrise.me.uk>
+// Modified 2026 by the Chip's Workshop fork contributors (see README.md for a list of changes).
+// This is an unofficial modified version; it is not endorsed by the original author.
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of version 3 of the GNU General Public License as
@@ -32,6 +34,7 @@
 #include <wx/confbase.h>
 #include <wx/filefn.h>
 #include <wx/msgdlg.h>
+#include <wx/utils.h>
 #include <cstdlib>
 #include <ctime>
 
@@ -49,6 +52,18 @@ END_EVENT_TABLE()
 App::App()
  : docmgr(NULL), autostart(false)
 {
+}
+
+bool App::Initialize(int& argc, wxChar** argv) {
+#ifdef __WXGTK__
+    // The XIM input method breaks redrawing under GTK3: windows stop updating until
+    // they are resized. If it is selected, fall back to GTK's default input method.
+    // This must happen before GTK is initialised by wxApp::Initialize().
+    wxString inputmethod;
+    if(wxGetEnv(wxT("GTK_IM_MODULE"), &inputmethod) && inputmethod == wxT("xim"))
+        wxUnsetEnv(wxT("GTK_IM_MODULE"));
+#endif
+    return wxApp::Initialize(argc, argv);
 }
 
 bool App::OnInit() {
@@ -86,7 +101,7 @@ bool App::OnInit() {
 
 void App::OnInitCmdLine(wxCmdLineParser& parser) {
     wxApp::OnInitCmdLine(parser);
-    parser.SetLogo(wxT("Chip's Workshop " VERSION " Copyright 2008-2011 Christopher Elsby\nCompiled with ") wxVERSION_STRING);
+    parser.SetLogo(wxT("Chip's Workshop " VERSION " (modified fork) Copyright 2008-2011 Christopher Elsby\nModified 2026 by the Chip's Workshop fork contributors\nCompiled with ") wxVERSION_STRING);
     parser.AddSwitch(wxT("v"), wxT("version"), wxT("show the version number and copyright notice"));
     parser.AddParam(wxT("file"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL | wxCMD_LINE_PARAM_MULTIPLE);
 }
@@ -135,7 +150,13 @@ void App::OnCommand(wxCommandEvent& event) {
     switch(event.GetId()) {
     case wxID_ABOUT:
         wxMessageBox(
-            wxT("Chip's Workshop " VERSION "\nCopyright 2008-2011,2021 Christopher Elsby\nCompiled on " __DATE__ " " __TIME__ ".\n"
+            wxT("Chip's Workshop " VERSION " (modified fork)\nCopyright 2008-2011,2021 Christopher Elsby\n"
+            "Modified 2026 by the Chip's Workshop fork contributors: modern GTK3 redraw fixes, "
+            "map zoom and view dragging, labelled invalid tiles. This is an unofficial version, "
+            "not endorsed by the original author.\n"
+            "Chip's Workshop is an independent fan-made editor and is not affiliated with "
+            "the owners of Chip's Challenge.\n"
+            "Compiled on " __DATE__ " " __TIME__ ".\n"
             "Compiled with ") wxVERSION_STRING wxT(".\n"
             "The included tile images are by Anders Kaseorg and Michael Hansen.\n"
             "This program is free software: you can redistribute it and/or modify it "
