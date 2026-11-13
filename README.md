@@ -1,3 +1,5 @@
+# Edited with LLM, beware of slop. I carefully ensured it works well, but be aware.
+
 # Chip's Workshop (modified fork)
 
 Chip's Workshop is a level editor for *Chip's Challenge* level sets (`.dat` / `.ccl`, MSCC format).
